@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { supabaseBrowser } from "@/lib/supabase/browser";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 
-export default function LoginPage() {
+function LoginInner() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -43,9 +43,10 @@ export default function LoginPage() {
       });
     }
 
-    const redirectTo = typeof next === "string" && next.startsWith("/")
-      ? next
-      : (data?.redirectTo || "/app");
+    const redirectTo =
+      typeof next === "string" && next.startsWith("/")
+        ? next
+        : data?.redirectTo || "/app";
 
     router.push(redirectTo);
     router.refresh();
@@ -84,15 +85,9 @@ export default function LoginPage() {
             />
           </div>
 
-          {error && (
-            <div className="text-sm text-destructive">{error}</div>
-          )}
+          {error && <div className="text-sm text-destructive">{error}</div>}
 
-          <Button
-            type="submit"
-            className="w-full"
-            disabled={loading}
-          >
+          <Button type="submit" className="w-full" disabled={loading}>
             {loading ? "Signing in..." : "Sign in"}
           </Button>
         </form>
@@ -105,5 +100,19 @@ export default function LoginPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-background flex items-center justify-center px-6">
+          <div className="text-sm text-muted-foreground">Loading…</div>
+        </div>
+      }
+    >
+      <LoginInner />
+    </Suspense>
   );
 }
