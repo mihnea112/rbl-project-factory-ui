@@ -33,10 +33,10 @@ export default function SimpleNavigation({ userRole }: SimpleNavigationProps) {
     <aside className="w-64 bg-sidebar border-r border-sidebar-border flex flex-col">
       <div className="p-6 border-b border-sidebar-border flex items-center gap-3">
         <Image
-          src="/logo.svg"
+          src="/logo.png"
           alt="RBL Project Factory"
-          width={32}
-          height={32}
+          width={100}
+          height={150}
           className="shrink-0"
         />
         <span className="text-lg font-bold text-sidebar-foreground">

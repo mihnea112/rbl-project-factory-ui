@@ -1,56 +1,65 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 import { Suspense, useState } from "react";
-import { supabaseBrowser } from "@/lib/supabase/browser";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { supabaseBrowser } from "@/lib/supabase/browser";
 
 function LoginInner() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const router = useRouter();
-  const sp = useSearchParams();
-  const next = sp.get("next") ?? "/app";
+  const next = searchParams.get("next") ?? "/app";
 
-  async function onSubmit(e: React.FormEvent) {
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
 
-    const res = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
-
-    const data = await res.json().catch(() => ({}));
-    setLoading(false);
-
-    if (!res.ok) {
-      setError(data?.error || "Login failed");
-      return;
-    }
-
-    if (data?.access_token && data?.refresh_token) {
-      const supabase = supabaseBrowser();
-      await supabase.auth.setSession({
-        access_token: data.access_token,
-        refresh_token: data.refresh_token,
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ email, password }),
       });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setError(data?.error || "Login failed");
+        return;
+      }
+
+      // Store session in browser for client guards
+      if (data?.access_token && data?.refresh_token) {
+        const supabase = supabaseBrowser();
+        await supabase.auth.setSession({
+          access_token: data.access_token,
+          refresh_token: data.refresh_token,
+        });
+      }
+
+      const redirectTo =
+        typeof next === "string" && next.startsWith("/")
+          ? next
+          : data?.redirectTo || "/app";
+
+      router.replace(redirectTo);
+      router.refresh();
+    } catch (err: any) {
+      setError(err?.message || "Login failed");
+    } finally {
+      setLoading(false);
     }
-
-    const redirectTo =
-      typeof next === "string" && next.startsWith("/")
-        ? next
-        : data?.redirectTo || "/app";
-
-    router.push(redirectTo);
-    router.refresh();
-  }
+  };
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-6">
@@ -88,7 +97,7 @@ function LoginInner() {
           {error && <div className="text-sm text-destructive">{error}</div>}
 
           <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? "Signing in..." : "Sign in"}
+            {loading ? "Signing in…" : "Sign in"}
           </Button>
         </form>
 
