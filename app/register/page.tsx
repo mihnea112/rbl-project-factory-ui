@@ -1,62 +1,64 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
+export const dynamic = 'force-dynamic';
 
-type Role = "applicant" | "supporter";
+import { Suspense, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
 
-export default function RegisterPage() {
-  const [fullName, setFullName] = useState("");
-  const [role, setRole] = useState<Role>("applicant");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+type Role = 'applicant' | 'supporter';
+
+function RegisterInner() {
+  const [fullName, setFullName] = useState('');
+  const [role, setRole] = useState<Role>('applicant');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const router = useRouter();
   const sp = useSearchParams();
-  const next = sp.get("next") ?? "";
+  const next = sp.get('next') ?? '';
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     setLoading(true);
 
-    const res = await fetch("/api/auth/register", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ email, password, fullName, role }),
-    });
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email, password, fullName, role }),
+      });
 
-    const data = await res.json().catch(() => ({}));
-    setLoading(false);
+      const data = await res.json().catch(() => ({}));
 
-    if (!res.ok) {
-      setError(data?.error || "Register failed");
-      return;
+      if (!res.ok) {
+        setError(data?.error || 'Register failed');
+        return;
+      }
+
+      // If caller provided ?next=, honor it; otherwise use role-based redirect from API
+      const redirectTo =
+        typeof next === 'string' && next.startsWith('/') ? next : data?.redirectTo || '/app';
+
+      router.replace(redirectTo);
+      router.refresh();
+    } catch (err: any) {
+      setError(err?.message || 'Register failed');
+    } finally {
+      setLoading(false);
     }
-
-    // If caller provided ?next=, honor it; otherwise use role-based redirect from API
-    const redirectTo = typeof next === "string" && next.startsWith("/")
-      ? next
-      : (data?.redirectTo || "/app");
-
-    router.push(redirectTo);
-    router.refresh();
   }
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center px-6">
       <div className="w-full max-w-md bg-card border border-border rounded-2xl p-6">
-        <h1 className="text-2xl font-semibold text-foreground mb-1">
-          Create account
-        </h1>
-        <p className="text-sm text-muted-foreground mb-6">
-          Join Project Factory OS.
-        </p>
+        <h1 className="text-2xl font-semibold text-foreground mb-1">Create account</h1>
+        <p className="text-sm text-muted-foreground mb-6">Join Project Factory OS.</p>
 
         <form onSubmit={onSubmit} className="space-y-4">
           <div className="space-y-2">
@@ -79,9 +81,7 @@ export default function RegisterPage() {
               <option value="applicant">Applicant (submit a project)</option>
               <option value="supporter">Supporter (mentor / fund / network)</option>
             </select>
-            <p className="text-xs text-muted-foreground">
-              Reviewer/Admin roles are assigned by RBL internally.
-            </p>
+            <p className="text-xs text-muted-foreground">Reviewer/Admin roles are assigned by RBL internally.</p>
           </div>
 
           <div className="space-y-2">
@@ -112,17 +112,31 @@ export default function RegisterPage() {
           {error && <div className="text-sm text-destructive">{error}</div>}
 
           <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? "Creating..." : "Create account"}
+            {loading ? 'Creating…' : 'Create account'}
           </Button>
         </form>
 
         <div className="mt-6 text-sm text-muted-foreground">
-          Already have an account?{" "}
+          Already have an account?{' '}
           <Link className="text-accent underline" href="/login">
             Log in
           </Link>
         </div>
       </div>
     </div>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-background flex items-center justify-center px-6">
+          <div className="text-sm text-muted-foreground">Loading…</div>
+        </div>
+      }
+    >
+      <RegisterInner />
+    </Suspense>
   );
 }
