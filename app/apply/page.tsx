@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { ChevronRight, ChevronLeft, Check } from "lucide-react";
+import { ChevronRight, ChevronLeft, Check, Sparkles } from "lucide-react";
 import { ApplicationStream } from "@/lib/types";
 import TriageResultsPage from "./triage-result";
 
@@ -53,6 +53,19 @@ export default function ApplyPage() {
 
   const [authChecked, setAuthChecked] = useState(false);
 
+  // Query params (avoid useSearchParams to prevent Suspense/prerender issues)
+  const [initialApplicationId, setInitialApplicationId] = useState<
+    string | null
+  >(null);
+  const [mode, setMode] = useState<"view" | "edit">("view");
+
+  // Loading existing application
+  const [loadingExisting, setLoadingExisting] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const isViewingExisting = !!initialApplicationId && mode === "view";
+  const isEditingExisting = !!initialApplicationId && mode === "edit";
+
   useEffect(() => {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -68,12 +81,23 @@ export default function ApplyPage() {
     (async () => {
       const { data, error } = await supabase.auth.getUser();
       if (error || !data?.user) {
-        router.replace("/login?next=/apply");
+        const nextUrl = window.location.pathname + window.location.search;
+        router.replace(`/login?next=${encodeURIComponent(nextUrl)}`);
         return;
       }
       setAuthChecked(true);
     })();
   }, [router]);
+
+  useEffect(() => {
+    // Client-only query parsing (no Suspense requirement)
+    const sp = new URLSearchParams(window.location.search);
+    const appId = sp.get("applicationId");
+    const m = sp.get("mode");
+
+    if (appId) setInitialApplicationId(appId);
+    setMode(m === "edit" ? "edit" : "view");
+  }, []);
 
   const [formData, setFormData] = useState({
     title: "",
@@ -108,6 +132,73 @@ export default function ApplyPage() {
     // Questionnaire answers (AI will score from these)
     answers: {} as Record<string, string>,
   });
+
+  useEffect(() => {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+    if (!authChecked) return;
+    if (!initialApplicationId) return;
+
+    // If env missing, we can’t load from DB.
+    if (!url || !anon) {
+      setLoadError(
+        "Missing Supabase env variables; cannot load application from DB.",
+      );
+      return;
+    }
+
+    const supabase = createBrowserClient(url, anon);
+
+    (async () => {
+      setLoadingExisting(true);
+      setLoadError(null);
+
+      // Ensure user exists (RLS-friendly)
+      const { data: u, error: uErr } = await supabase.auth.getUser();
+      if (uErr || !u?.user) {
+        const nextUrl = `/apply?applicationId=${encodeURIComponent(
+          initialApplicationId,
+        )}${mode === "edit" ? "&mode=edit" : ""}`;
+        router.replace(`/login?next=${encodeURIComponent(nextUrl)}`);
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("applications")
+        .select(
+          "id, applicant_id, stream, status, created_at, form_data, ai_result",
+        )
+        .eq("id", initialApplicationId)
+        .single();
+
+      if (error || !data) {
+        setLoadError(error?.message || "Application not found");
+        setLoadingExisting(false);
+        return;
+      }
+
+      // Pre-fill
+      const stream = (data as any).stream as ApplicationStream;
+      const fd = (data as any).form_data || {};
+
+      setSavedApplicationId((data as any).id);
+      setSelectedStream(stream);
+      setFormData({
+        // keep defaults so missing fields don’t break UI
+        ...formData,
+        ...fd,
+        stream,
+        answers: fd?.answers || {},
+      });
+
+      // Jump to review in view mode; keep edit mode at the start of form
+      setCurrentStep(mode === "edit" ? "basic-info" : "review");
+
+      setLoadingExisting(false);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authChecked, initialApplicationId]);
 
   // --- Steps (dynamic by stream) ---
   const stepsA: Step[] = [
@@ -736,6 +827,14 @@ export default function ApplyPage() {
     }
   };
 
+  // ✅ View Analysis for existing applications (uses savedApplicationId/initialApplicationId)
+  const openAnalysis = () => {
+    const id = savedApplicationId ?? initialApplicationId;
+    if (!id) return;
+    setSavedApplicationId(id);
+    setShowTriageResults(true);
+  };
+
   const handleSubmit = async () => {
     if (!formData.stream) {
       alert("Please select a stream first.");
@@ -744,7 +843,37 @@ export default function ApplyPage() {
 
     setSubmitting(true);
     try {
-      // 1) Save application first (server route inserts into public.applications)
+      // ✅ If editing an existing application, UPDATE it instead of creating a new one.
+      if (isEditingExisting && savedApplicationId) {
+        const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+        if (!url || !anon) throw new Error("Missing Supabase env variables");
+
+        const supabase = createBrowserClient(url, anon);
+
+        const { data: u, error: uErr } = await supabase.auth.getUser();
+        if (uErr || !u?.user) throw new Error("Not authenticated");
+
+        const { error: upErr } = await supabase
+          .from("applications")
+          .update({
+            stream: formData.stream,
+            form_data: {
+              ...formData,
+              stream: formData.stream,
+            },
+            status: "submitted",
+          })
+          .eq("id", savedApplicationId)
+          .eq("applicant_id", u.user.id);
+
+        if (upErr) throw new Error(upErr.message);
+
+        setShowTriageResults(true);
+        return;
+      }
+
+      // ✅ Otherwise, create a NEW application
       const saveRes = await fetch("/api/applications", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -752,7 +881,6 @@ export default function ApplyPage() {
           stream: formData.stream,
           form_data: {
             ...formData,
-            // keep the payload clean
             stream: formData.stream,
           },
         }),
@@ -770,7 +898,6 @@ export default function ApplyPage() {
       if (!id)
         throw new Error("Save succeeded but no application id was returned");
 
-      // 2) Show triage results page using REAL UUID
       setSavedApplicationId(id);
       setShowTriageResults(true);
     } catch (e: any) {
@@ -784,6 +911,46 @@ export default function ApplyPage() {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <div className="text-sm text-muted-foreground">Checking session…</div>
+      </div>
+    );
+  }
+
+  if (loadingExisting) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-sm text-muted-foreground">
+          Loading application…
+        </div>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="max-w-3xl mx-auto px-6 py-12">
+          <Card className="p-6 border-border bg-card">
+            <h2 className="text-xl font-bold text-foreground mb-2">
+              Could not open application
+            </h2>
+            <p className="text-sm text-muted-foreground">{loadError}</p>
+            <div className="mt-6 flex gap-3">
+              <Button
+                variant="outline"
+                className="border-border text-foreground hover:bg-slate-light bg-transparent"
+                onClick={() => router.push("/app/applicant")}
+              >
+                Back to dashboard
+              </Button>
+              <Button
+                className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                onClick={() => router.push("/apply")}
+              >
+                Start new application
+              </Button>
+            </div>
+          </Card>
+        </div>
       </div>
     );
   }
@@ -991,7 +1158,7 @@ export default function ApplyPage() {
           </div>
         )}
 
-        {/* Stream-Specific Details (kept from your current file) */}
+        {/* Stream-Specific Details */}
         {currentStep === "stream-details" && (
           <div className="space-y-6">
             <div>
@@ -1547,6 +1714,52 @@ export default function ApplyPage() {
             </div>
 
             <Card className="p-6 border-border bg-card">
+              {/* Info bar for view mode */}
+              {initialApplicationId && mode === "view" ? (
+                <div className="mb-4 rounded-lg border border-border bg-muted/40 p-4">
+                  <p className="text-sm text-foreground">
+                    You are viewing an existing application. To edit and
+                    resubmit, open this link with{" "}
+                    <span className="font-semibold">&mode=edit</span>.
+                  </p>
+                </div>
+              ) : null}
+
+              {/* Buttons in view mode */}
+              {isViewingExisting ? (
+                <div className="flex flex-wrap gap-3 mb-6">
+                  <Button
+                    variant="outline"
+                    className="border-border text-foreground hover:bg-slate-light bg-transparent"
+                    onClick={() => router.push("/app/applicant")}
+                  >
+                    Back to dashboard
+                  </Button>
+
+                  <Button
+                    variant="outline"
+                    className="gap-2 border-border text-foreground hover:bg-slate-light bg-transparent"
+                    onClick={openAnalysis}
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    View analysis
+                  </Button>
+
+                  <Button
+                    className="bg-primary hover:bg-primary/90 text-primary-foreground"
+                    onClick={() =>
+                      router.push(
+                        `/apply?applicationId=${encodeURIComponent(
+                          initialApplicationId!,
+                        )}&mode=edit`,
+                      )
+                    }
+                  >
+                    Edit application
+                  </Button>
+                </div>
+              ) : null}
+
               <div className="space-y-6">
                 <div>
                   <h3 className="font-semibold text-foreground mb-3 text-lg">
@@ -1603,14 +1816,28 @@ export default function ApplyPage() {
           </Button>
 
           {currentStep === "review" ? (
-            <Button
-              onClick={handleSubmit}
-              disabled={submitting}
-              className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground ml-auto"
-            >
-              {submitting ? "Submitting…" : "Submit Application"}
-              <ChevronRight className="w-4 h-4" />
-            </Button>
+            isViewingExisting ? (
+              <Button
+                onClick={() => router.push("/app/applicant")}
+                className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground ml-auto"
+              >
+                Back
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            ) : (
+              <Button
+                onClick={handleSubmit}
+                disabled={submitting}
+                className="gap-2 bg-primary hover:bg-primary/90 text-primary-foreground ml-auto"
+              >
+                {submitting
+                  ? "Submitting…"
+                  : isEditingExisting
+                    ? "Resubmit Application"
+                    : "Submit Application"}
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            )
           ) : (
             <Button
               onClick={handleNext}

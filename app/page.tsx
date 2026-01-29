@@ -1,6 +1,16 @@
 "use client";
 
-import { ArrowRight, Check, Zap, TrendingUp } from "lucide-react";
+import {
+  ArrowRight,
+  Check,
+  Zap,
+  TrendingUp,
+  Search,
+  FlaskConical,
+  MapPin,
+  Expand,
+  Building2,
+} from "lucide-react";
 import Link from "next/link";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
@@ -75,18 +85,37 @@ export default function LandingPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
           {[
-            { stage: "Selection", desc: "Identify promising impact projects" },
-            { stage: "Incubation", desc: "Build team and validate approach" },
-            { stage: "Chapter Pilot", desc: "Test in local ecosystem" },
-            { stage: "Scale", desc: "Replicate across regions" },
+            {
+              stage: "Selection",
+              desc: "Identify promising impact projects",
+              Icon: Search,
+            },
+            {
+              stage: "Incubation",
+              desc: "Build team and validate approach",
+              Icon: FlaskConical,
+            },
+            {
+              stage: "Chapter Pilot",
+              desc: "Test in local ecosystem",
+              Icon: MapPin,
+            },
+            {
+              stage: "Scale",
+              desc: "Replicate across regions",
+              Icon: Expand,
+            },
             {
               stage: "Institutionalize",
               desc: "Establish self-sustaining model",
+              Icon: Building2,
             },
           ].map((item, idx) => (
             <div key={idx} className="relative">
               <div className="bg-card rounded-xl p-6 border border-border h-full">
-                <div className="w-10 h-10 rounded-lg bg-primary/10 mb-3" />
+                <div className="w-10 h-10 rounded-lg bg-primary/10 mb-3 flex items-center justify-center">
+                  <item.Icon className="w-5 h-5 text-primary" />
+                </div>
                 <h3 className="font-semibold text-foreground mb-2">
                   {item.stage}
                 </h3>

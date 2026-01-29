@@ -12,6 +12,7 @@ import {
   BriefcaseIcon,
 } from 'lucide-react';
 import Link from 'next/link';
+import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 
 interface AppSidebarProps {
@@ -26,8 +27,8 @@ export default function AppSidebar({ userRole }: AppSidebarProps) {
       { href: '/app/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['applicant', 'reviewer', 'project-lead', 'supporter', 'admin'] },
       { href: '/app/applicant', label: 'My Applications', icon: FileText, roles: ['applicant'] },
       { href: '/app/reviewer', label: 'Reviewer Console', icon: FileText, roles: ['reviewer'] },
-      { href: '/app/projects', label: 'Projects', icon: BriefcaseIcon, roles: ['project-lead', 'supporter', 'reviewer'] },
-      { href: '/app/marketplace', label: 'Marketplace', icon: ShoppingBag, roles: ['supporter', 'project-lead'] },
+      { href: '/app/projects', label: 'Projects', icon: BriefcaseIcon, roles: ['project-lead', 'reviewer'] },
+      { href: '/app/marketplace', label: 'Marketplace', icon: ShoppingBag, roles: [ 'project-lead'] },
       { href: '/app/portfolio', label: 'Portfolio', icon: BarChart3, roles: ['reviewer', 'admin'] },
       { href: '/app/admin', label: 'Admin', icon: Settings, roles: ['admin'] },
     ];
@@ -40,10 +41,17 @@ export default function AppSidebar({ userRole }: AppSidebarProps) {
   return (
     <Sidebar className="bg-white border-r border-border">
       <SidebarHeader className="border-b border-border px-6 py-4">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-            <span className="text-primary-foreground font-bold text-sm">RBL</span>
-          </div>
+        <div className="flex items-center gap-3">
+          <Link href="/" className="shrink-0" aria-label="Go to homepage">
+            <Image
+              src="/logo.png"
+              alt="RBL"
+              width={120}
+              height={180}
+              className="h-10 w-auto rounded-md"
+              priority
+            />
+          </Link>
           <span className="font-semibold text-foreground">Project OS</span>
         </div>
       </SidebarHeader>

@@ -3,6 +3,7 @@
 import { ReactNode, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import Image from 'next/image';
 import { supabaseBrowser } from '@/lib/supabase/browser';
 
 export function AppLayoutClient({ children }: { children: ReactNode }) {
@@ -104,7 +105,17 @@ export function AppLayoutClient({ children }: { children: ReactNode }) {
       {/* Sidebar */}
       <aside className="w-64 bg-sidebar border-r border-sidebar-border flex flex-col">
         <div className="p-6 border-b border-sidebar-border">
-          <h2 className="text-lg font-bold text-sidebar-foreground">RBL</h2>
+          <Link href="/" className="flex items-center gap-3" aria-label="Go to homepage">
+            <Image
+              src="/logo.png"
+              alt="RBL"
+              width={140}
+              height={48}
+              className="h-10 w-auto rounded-md"
+              priority
+            />
+            <span className="text-lg font-bold text-sidebar-foreground">Project OS</span>
+          </Link>
         </div>
         <nav className="flex-1 overflow-auto p-4">
           <ul className="space-y-2">
@@ -125,7 +136,19 @@ export function AppLayoutClient({ children }: { children: ReactNode }) {
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         <div className="bg-card border-b border-border px-6 py-4 flex items-center justify-between">
-          <h1 className="text-lg font-semibold text-foreground">RBL Project Factory</h1>
+          <div className="flex items-center gap-3">
+            <Link href="/" className="shrink-0" aria-label="Go to homepage">
+              <Image
+                src="/logo.png"
+                alt="RBL"
+                width={120}
+                height={180}
+                className="h-9 w-auto rounded-md"
+                priority
+              />
+            </Link>
+            <h1 className="text-lg font-semibold text-foreground">RBL Project Factory</h1>
+          </div>
           <div className="flex items-center gap-4">
             <span className="text-sm text-muted-foreground">{displayName}</span>
             <button
